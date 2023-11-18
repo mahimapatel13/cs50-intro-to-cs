@@ -1,1 +1,60 @@
+import csv
+from cs50 import SQL
+
+# Open and read the CSV file
+with open("students.csv", "r") as file:
+    reader = csv.DictReader(file)
+
+    # Connect to the database
+    db = SQL("sqlite:///newroster.db")
+
+    # Use a transaction for database operations
+    db.execute("BEGIN TRANSACTION")
+
+    try:
+        # Delete existing data
+        db.execute("DELETE FROM house_assignment")
+        db.execute("DELETE FROM students")
+        db.execute("DELETE FROM houses")
+
+        # Count number of students in each house, and store head of houses in dictionaries
+        counts = {}
+        heads = {}
+        for row in reader:
+            house = row["house"]
+            head_house = row["head"]
+            if house in counts:
+                counts[house] += 1
+            else:
+                counts[house] = 1
+                heads[house] = head_house
+
+        # Insert distinct houses into the 'houses' table
+        for house in counts:
+            db.execute("INSERT INTO houses (house, head) VALUES (?, ?)", house, heads[house])
+
+        # Insert data into 'students' and 'house_assignment' using placeholders
+        for student_name, student_house, student_id in reader:
+            print(student_name, student_house, student_id)
+            db.execute("INSERT INTO students (student_name) VALUES (?)", student_name)
+
+            # Get the house ID for the current student
+            house_id_result = db.execute("SELECT id FROM houses WHERE house = ?", student_house)
+
+            if house_id_result:
+                house_id = house_id_result[0]["id"]
+
+                # Insert into 'house_assignment' table
+                db.execute("INSERT INTO house_assignment (student_id, house_id) VALUES (?, ?)", student_id, house_id)
+            else:
+                print(f"Error: House not found for student {student_name} ({student_id})")
+
+        # Commit the transaction
+        db.execute("COMMIT")
+
+    except Exception as e:
+        # Rollback the transaction in case of an error
+        db.execute("ROLLBACK")
+        print(f"Error: {e}")
+
 
